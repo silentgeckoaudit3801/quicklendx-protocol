@@ -108,6 +108,8 @@ pub mod storage;
 mod test_accept_bid_instruction_budget;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_kyc_recheck_on_accept;
 #[cfg(test)]
 mod test_panic_handler;
 #[cfg(test)]
