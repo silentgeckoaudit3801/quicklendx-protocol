@@ -129,6 +129,17 @@ pub struct Progress {
     pub status: InvoiceStatus,
 }
 
+#[contracttype]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+pub struct SettlementSummary {
+    pub total_due: i128,
+    pub total_paid: i128,
+    pub remaining: i128,
+    pub percent_complete_bps: u32,
+    pub finalized: bool,
+}
+
 /// Record a partial payment for an invoice.
 ///
 /// If the total paid amount reaches the invoice total, the settlement is finalized.
@@ -467,6 +478,42 @@ pub fn get_invoice_progress(
         progress_percent,
         payment_count: get_payment_count_internal(env, invoice_id),
         status: invoice.status,
+    })
+}
+
+/// Returns a canonical settlement summary for off-chain consumers.
+pub fn get_settlement_summary(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+) -> Result<SettlementSummary, QuickLendXError> {
+    let progress = get_invoice_progress(env, invoice_id)?;
+    let finalized = is_invoice_finalized(env, invoice_id)?;
+
+    let percent_complete_bps = if progress.total_due <= 0 {
+        0
+    } else {
+        let scaled = progress
+            .total_paid
+            .checked_mul(10_000)
+            .ok_or(QuickLendXError::InvalidAmount)?;
+        let bps = scaled
+            .checked_div(progress.total_due)
+            .ok_or(QuickLendXError::InvalidAmount)?;
+        if bps > 10_000 {
+            10_000
+        } else if bps < 0 {
+            0
+        } else {
+            bps as u32
+        }
+    };
+
+    Ok(SettlementSummary {
+        total_due: progress.total_due,
+        total_paid: progress.total_paid,
+        remaining: if finalized { 0 } else { progress.remaining_due },
+        percent_complete_bps,
+        finalized,
     })
 }
 

@@ -57,6 +57,8 @@ mod test_maintenance;
 mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
+#[cfg(test)]
+mod test_settlement_summary;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
@@ -359,7 +361,9 @@ use invoice_search::InvoiceSearch;
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee};
 use settlement::{
+    get_settlement_summary as do_get_settlement_summary,
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
+    SettlementSummary,
 };
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
@@ -1870,6 +1874,14 @@ impl QuickLendXContract {
         let investment = InvestmentStorage::get_investment(&env, &investment_id)
             .unwrap();
         Ok(investment.insurance)
+    }
+
+    /// Get canonical settlement progress for off-chain consumers.
+    pub fn get_settlement_summary(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<SettlementSummary, QuickLendXError> {
+        do_get_settlement_summary(&env, &invoice_id)
     }
 
     /// Process a partial payment towards an invoice.
