@@ -3,7 +3,7 @@ mod tests {
     use crate::invoice::InvoiceCategory;
     use crate::settlement::{get_settlement_summary, is_invoice_finalized};
     use crate::{QuickLendXContract, QuickLendXContractClient, QuickLendXError};
-    use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
+    use soroban_sdk::{testutils::{Address as _, Ledger}, token, Address, BytesN, Env, String, Vec};
 
     fn setup_funded_invoice(
         env: &Env,
@@ -99,14 +99,22 @@ mod tests {
         assert_eq!(capped.percent_complete_bps, 10_000);
         assert!(!capped.finalized);
 
-        client.settle_invoice(&invoice_id, &0);
-        let finalized = client.get_settlement_summary(&invoice_id).unwrap();
+        let finalize_invoice_id = setup_funded_invoice(&env, &client, &contract_id, invoice_amount);
+        client.process_partial_payment(
+            &finalize_invoice_id,
+            &250,
+            &String::from_str(&env, "final-pay-1"),
+        );
+        client.settle_invoice(&finalize_invoice_id, &750);
+        let finalized = client.get_settlement_summary(&finalize_invoice_id).unwrap();
+        assert_eq!(finalized.total_due, invoice_amount);
+        assert_eq!(finalized.total_paid, invoice_amount);
         assert_eq!(finalized.remaining, 0);
         assert_eq!(finalized.percent_complete_bps, 10_000);
         assert!(finalized.finalized);
 
         assert!(env
-            .as_contract(&contract_id, || is_invoice_finalized(&env, &invoice_id))
+            .as_contract(&contract_id, || is_invoice_finalized(&env, &finalize_invoice_id))
             .unwrap());
     }
 }
