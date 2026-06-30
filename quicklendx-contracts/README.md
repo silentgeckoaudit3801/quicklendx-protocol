@@ -1263,3 +1263,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with ❤️ on Stellar's Soroban platform**
+
+
+## Documentation
+
+- [Emergency withdraw runbook](docs/EMERGENCY_WITHDRAW.md): timelock, nonce cancellation, execute/cancel rejection conditions, and operator checks.
