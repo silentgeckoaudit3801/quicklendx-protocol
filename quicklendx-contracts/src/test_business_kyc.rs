@@ -46,6 +46,48 @@ fn create_reason_with_len(env: &Env, len: u32) -> String {
 // ============================================================================
 // Business KYC Submission Tests
 // ============================================================================
+#[test]
+fn test_business_verification_summary_tracks_status_and_reason() {
+    let (env, client, admin) = setup();
+    let business = Address::generate(&env);
+    let kyc_data = create_test_kyc_data(&env, "SummaryBusiness");
+    let rejection_reason = String::from_str(&env, "Missing registration certificate");
+
+    assert!(client.get_business_verification_summary(&business).is_none());
+
+    client.submit_kyc_application(&business, &kyc_data);
+    let pending = client.get_business_verification_summary(&business).unwrap();
+    assert!(matches!(
+        pending.status,
+        BusinessVerificationStatus::Pending
+    ));
+    assert!(pending.rejection_reason.is_none());
+
+    client.reject_business(&admin, &business, &rejection_reason);
+    let rejected = client.get_business_verification_summary(&business).unwrap();
+    assert!(matches!(
+        rejected.status,
+        BusinessVerificationStatus::Rejected
+    ));
+    assert_eq!(rejected.rejection_reason, Some(rejection_reason));
+
+    let improved_kyc_data = create_test_kyc_data(&env, "SummaryBusinessUpdated");
+    client.submit_kyc_application(&business, &improved_kyc_data);
+    let resubmitted = client.get_business_verification_summary(&business).unwrap();
+    assert!(matches!(
+        resubmitted.status,
+        BusinessVerificationStatus::Pending
+    ));
+    assert!(resubmitted.rejection_reason.is_none());
+
+    client.verify_business(&admin, &business);
+    let verified = client.get_business_verification_summary(&business).unwrap();
+    assert!(matches!(
+        verified.status,
+        BusinessVerificationStatus::Verified
+    ));
+    assert!(verified.rejection_reason.is_none());
+}
 
 #[test]
 fn test_business_can_submit_own_kyc() {

@@ -36,6 +36,12 @@ pub struct BusinessVerification {
 }
 
 #[contracttype]
+pub struct BusinessVerificationSummary {
+    pub status: BusinessVerificationStatus,
+    pub rejection_reason: Option<String>,
+}
+
+#[contracttype]
 #[derive(Clone, PartialEq, Debug)]
 pub enum InvestorTier {
     Basic,
@@ -943,6 +949,18 @@ pub fn get_business_verification_status(
     business: &Address,
 ) -> Option<BusinessVerification> {
     BusinessVerificationStorage::get_verification(env, business)
+}
+
+pub fn get_business_verification_summary(
+    env: &Env,
+    business: &Address,
+) -> Option<BusinessVerificationSummary> {
+    BusinessVerificationStorage::get_verification(env, business).map(|verification| {
+        BusinessVerificationSummary {
+            status: verification.status,
+            rejection_reason: verification.rejection_reason,
+        }
+    })
 }
 
 pub fn require_business_verification(env: &Env, business: &Address) -> Result<(), QuickLendXError> {

@@ -363,14 +363,14 @@ use settlement::{
 };
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
-    determine_investor_tier, get_investor_verification as do_get_investor_verification,
+    determine_investor_tier, get_business_verification_summary as do_get_business_verification_summary, get_investor_verification as do_get_investor_verification,
     normalize_tag, reject_business,
     reject_investor as do_reject_investor, revoke_investor_kyc as do_revoke_investor_kyc,
     recompute_investor_tier, require_business_not_pending,
     require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
-    verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
+    verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus, BusinessVerificationSummary,
     BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
     InvestorVerificationStorage,
 };
@@ -2137,6 +2137,14 @@ impl QuickLendXContract {
         business: Address,
     ) -> Option<verification::BusinessVerification> {
         verification::get_business_verification_status(&env, &business)
+    }
+
+    /// Get compact business KYC status and rejection reason without returning encrypted KYC data
+    pub fn get_business_verification_summary(
+        env: Env,
+        business: Address,
+    ) -> Option<BusinessVerificationSummary> {
+        do_get_business_verification_summary(&env, &business)
     }
 
     /// Set admin address (initialization function)
