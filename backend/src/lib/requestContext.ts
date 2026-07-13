@@ -16,6 +16,7 @@ import { ulid } from "ulid";
 
 interface RequestContext {
   correlationId: string;
+  actor?: string;
 }
 
 const storage = new AsyncLocalStorage<RequestContext>();
@@ -30,11 +31,30 @@ export function runWithContext<T>(correlationId: string, fn: () => T): T {
 }
 
 /**
+ * Run a callback with the full request context. Use this when downstream
+ * services need both request attribution and the authenticated actor.
+ */
+export function runWithRequestContext<T>(
+  context: { correlationId: string; actor?: string },
+  fn: () => T
+): T {
+  return storage.run(context, fn);
+}
+
+/**
  * Get the correlation ID for the current async context.
  * Returns null if called outside a request context.
  */
 export function getCorrelationId(): string | null {
   return storage.getStore()?.correlationId ?? null;
+}
+
+/**
+ * Get the authenticated actor for the current async context.
+ * Returns null for unauthenticated/background work.
+ */
+export function getRequestActor(): string | null {
+  return storage.getStore()?.actor ?? null;
 }
 
 /**
@@ -90,13 +110,29 @@ export function sanitizeCorrelationId(raw: unknown): string | null {
  */
 export function createRequestContextMiddleware() {
   return function requestContextMiddleware(
-    req: { correlationId?: string; requestId?: string },
+    req: {
+      correlationId?: string;
+      requestId?: string;
+      actor?: string;
+      actorId?: string;
+      user?: { id?: string; userId?: string };
+      admin?: { id?: string };
+      apiKey?: { id?: string; keyId?: string };
+    },
     _res: unknown,
     next: () => void
   ): void {
     const id = req.correlationId ?? req.requestId;
+    const actor =
+      req.actor ??
+      req.actorId ??
+      req.user?.id ??
+      req.user?.userId ??
+      req.admin?.id ??
+      req.apiKey?.id ??
+      req.apiKey?.keyId;
     if (id) {
-      runWithContext(id, next);
+      runWithRequestContext({ correlationId: id, actor }, next);
     } else {
       next();
     }

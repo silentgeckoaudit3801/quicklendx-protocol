@@ -12,6 +12,8 @@ import {
   type EncryptedRecord,
   type KmsClient,
 } from "../services/kycService";
+import { runWithRequestContext } from "../lib/requestContext";
+import { auditLogService } from "../services/auditLogService";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -182,6 +184,7 @@ describe("KycService — encrypt/decrypt", () => {
   beforeEach(() => {
     provider = new LocalKeyProvider(VALID_HEX_KEY);
     service = new KycService(provider);
+    auditLogService.clear();
   });
 
   it("encrypts and decrypts a payload round-trip", async () => {
@@ -278,6 +281,39 @@ describe("KycService — encrypt/decrypt", () => {
     expect(logStr).not.toContain("123-45-6789"); // ssn
     expect(logStr).not.toContain("TAX-001");      // taxId
     expect(logStr).not.toContain(VALID_HEX_KEY);  // KEK
+  });
+
+  it("records request-scoped actor and field names for decrypted PII without plaintext", async () => {
+    const payload = makePayload();
+    const record = await service.encrypt(payload);
+
+    await runWithRequestContext(
+      { correlationId: "req-kyc-001", actor: "admin-42" },
+      () => service.decrypt(record)
+    );
+
+    const fieldEvents = service.getAccessLog().filter((entry) => entry.action === "decrypt_field");
+    expect(fieldEvents.length).toBeGreaterThan(0);
+    expect(fieldEvents.map((entry) => entry.fieldName)).toContain("ssn");
+    expect(fieldEvents[0]).toMatchObject({
+      actor: "admin-42",
+      requestId: "req-kyc-001",
+      keyId: "local-v1",
+    });
+
+    const auditEvents = auditLogService
+      .listEntries()
+      .filter((entry) => entry.action === "kyc.decrypt_field");
+    expect(auditEvents.length).toBe(fieldEvents.length);
+    expect(auditEvents[0].metadata).toMatchObject({
+      actor: "admin-42",
+      request_id: "req-kyc-001",
+    });
+
+    const auditText = JSON.stringify(auditEvents);
+    expect(auditText).not.toContain("123-45-6789");
+    expect(auditText).not.toContain("TAX-001");
+    expect(auditText).not.toContain("Alice Example");
   });
 
   it("getAccessLog returns a copy (immutable)", async () => {

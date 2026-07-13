@@ -14,6 +14,8 @@
 
 import * as crypto from "crypto";
 import { getPreparedStatement } from "../lib/database";
+import { getOrGenerateCorrelationId, getRequestActor } from "../lib/requestContext";
+import { auditLogService } from "./auditLogService";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -405,7 +407,15 @@ export class KycService {
     this.provider = p;
   }
 
-  getAccessLog(): Array<{ action: string; keyId?: string; userId?: string; timestamp: string }> {
+  getAccessLog(): Array<{
+    action: string;
+    keyId?: string;
+    userId?: string;
+    timestamp: string;
+    actor?: string;
+    requestId?: string;
+    fieldName?: string;
+  }> {
     return JSON.parse(JSON.stringify(this.accessLog));
   }
 
@@ -417,6 +427,30 @@ export class KycService {
       }
     }
     return out;
+  }
+
+  private recordDecryptAccess(parsed: Record<string, any>, keyId: string): void {
+    const actor = getRequestActor() ?? "system";
+    const requestId = getOrGenerateCorrelationId();
+    const fields = Array.from(new Set(SENSITIVE_FIELDS.filter((field) => field in parsed)));
+
+    for (const fieldName of fields) {
+      auditLogService.recordKycFieldAccess({
+        actor,
+        fieldName,
+        requestId,
+        keyId,
+      });
+      this.accessLog.push({
+        action: "decrypt_field",
+        userId: parsed.userId,
+        actor,
+        requestId,
+        fieldName,
+        timestamp: new Date().toISOString(),
+        keyId,
+      });
+    }
   }
 
   async encrypt(payload: KycPayload): Promise<EncryptedRecord> {
@@ -472,6 +506,7 @@ export class KycService {
         const pt = Buffer.concat([decipher.update(Buffer.from(record.ciphertext, "base64")), decipher.final()]);
         const parsed = JSON.parse(pt.toString("utf8"));
         const redacted = this.redact(parsed);
+        this.recordDecryptAccess(parsed, record.keyId);
         this.accessLog.push({ action: "decrypt", userId: parsed.userId, timestamp: new Date().toISOString(), keyId: record.keyId });
         return redacted;
       } catch (e) {
@@ -562,5 +597,3 @@ export function getKycStatus(businessId: string): { status: string; verifiedAt?:
     throw err;
   }
 }
-
-

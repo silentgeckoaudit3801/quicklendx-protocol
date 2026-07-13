@@ -35,6 +35,13 @@ interface AuditAdminActionEvent {
   metadata?: Record<string, unknown>;
 }
 
+interface AuditKycFieldAccessEvent {
+  actor: string;
+  fieldName: string;
+  requestId: string;
+  keyId?: string;
+}
+
 class AuditLogService {
   private readonly maxEntries = 250;
   private entries: AuditLogEntry[] = [];
@@ -62,6 +69,24 @@ class AuditLogService {
       path: event.path,
       ip: event.ip,
       metadata: event.metadata,
+    });
+  }
+
+  public recordKycFieldAccess(event: AuditKycFieldAccessEvent): void {
+    this.push({
+      timestamp: new Date().toISOString(),
+      action: "kyc.decrypt_field",
+      outcome: "performed",
+      role: "anonymous",
+      method: "INTERNAL",
+      path: "kyc.decrypt",
+      ip: "internal",
+      metadata: {
+        actor: event.actor,
+        field_name: event.fieldName,
+        request_id: event.requestId,
+        key_id: event.keyId,
+      },
     });
   }
 
